@@ -23,7 +23,7 @@ START:
 WAIT_START:
     JNB P3.2, WAIT_START  ; Wait until Start button is pressed
 
-    CALL GET_TIME         ; Get user input time
+    CALL GET_TIME         ; Get user input time from keypad
     CALL COUNTDOWN        ; Start countdown
 
     ; ====== AFTER COUNTDOWN ENDS ======
@@ -35,8 +35,20 @@ WAIT_START:
 
 ; ====== GET TIME INPUT FROM KEYPAD ======
 GET_TIME:
-    MOV R0, #60        ; Default 60s (for testing)
-    ; Code to take user input from keypad and store in R0
+    MOV R0, #00H         ; Initialize time to 0
+    MOV DPTR, #MSG6      ; Display "Enter Time"
+    CALL LCD_PRINT
+
+KEYPAD_LOOP:
+    CALL READ_KEYPAD      ; Get input from the user
+    CJNE A, #0FFH, VALID_INPUT  ; If valid key pressed, process
+    SJMP KEYPAD_LOOP      ; Otherwise, keep waiting
+
+VALID_INPUT:
+    CALL CONVERT_KEY      ; Convert keypad value to seconds
+    MOV R0, A            ; Store in R0
+    MOV DPTR, #MSG7      ; Display "Time Set"
+    CALL LCD_PRINT
     RET
 
 ; ====== COUNTDOWN LOGIC ======
@@ -95,20 +107,15 @@ SHOW_TIME:
     MOV P2, R1
     RET
 
-; ====== LCD PRINT ROUTINE ======
-LCD_PRINT:
-    ; Code for displaying message stored in DPTR on LCD
-    RET
+; ====== READ KEYPAD INPUT ======
+READ_KEYPAD:
+    MOV P1, #0F0H     ; Set row pins high, column pins low
+    MOV A, P1
+    ANL A, #0F0H      ; Mask out lower nibble
+    CJNE A, #0F0H, ROW_FOUND
 
-; ====== MESSAGES ======
-MSG1: DB 'Oven Ready', 00H
-MSG2: DB 'Cooking...', 00H
-MSG3: DB 'STOPPED!', 00H
-MSG4: DB 'Almost Done', 00H
-MSG5: DB '5 sec left', 00H
-DISP: DB 'COUNTDOWN', 00H
-
-END
+    MOV P1, #0FH      ; Set column pins high, row pins low
+    MOV A, P1
 
 
     
