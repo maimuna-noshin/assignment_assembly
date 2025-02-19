@@ -1,0 +1,114 @@
+ORG 0000H
+    SJMP START         ; Jump to main program
+
+; ====== INTERRUPT SERVICE ROUTINE (EMERGENCY STOP) ======
+ORG 0003H
+EMERGENCY_ISR:
+    CLR P1.0          ; Turn off oven LED
+    CLR P3.5          ; Stop countdown
+    MOV P2, #00H      ; Clear 7-segment display
+    CLR P0.0          ; Stop buzzer
+    MOV DPTR, #MSG3   ; Display "STOPPED" on LCD
+    CALL LCD_PRINT
+    RETI              ; Return from interrupt
+
+; ====== MAIN PROGRAM ======
+START:
+    MOV IE, #10000001B  ; Enable external interrupt (EX0)
+    SETB P1.0           ; Turn on oven LED (oven ready)
+    MOV DPTR, #MSG1     ; Display "Oven Ready"
+    CALL LCD_PRINT  
+
+; ====== WAIT FOR START BUTTON ======
+WAIT_START:
+    JNB P3.2, WAIT_START  ; Wait until Start button is pressed
+
+    CALL GET_TIME         ; Get user input time
+    CALL COUNTDOWN        ; Start countdown
+
+    ; ====== AFTER COUNTDOWN ENDS ======
+    SETB P0.0          ; Activate buzzer
+    CALL DELAY
+    CLR P0.0           ; Turn off buzzer
+
+    SJMP WAIT_START    ; Restart process
+
+; ====== GET TIME INPUT FROM KEYPAD ======
+GET_TIME:
+    MOV R0, #60        ; Default 60s (for testing)
+    ; Code to take user input from keypad and store in R0
+    RET
+
+; ====== COUNTDOWN LOGIC ======
+COUNTDOWN:
+    MOV A, R0          ; Load countdown time
+    MOV R1, A
+
+    ; If time > 60s, change LCD messages every 20s
+    MOV DPTR, #MSG2
+    CJNE A, #60, CHANGE_LCD
+
+COUNT_LOOP:
+    MOV DPTR, #DISP  ; Load 7-segment display routine
+    CALL SHOW_TIME   ; Update display
+
+    ; Check Emergency Stop
+    JB P3.5, EMERGENCY_STOP
+
+    CALL DELAY        ; 1-second delay
+    DJNZ R1, COUNT_LOOP  ; Loop until time = 0
+    RET
+
+; ====== LCD MESSAGE UPDATE DURING COUNTDOWN ======
+CHANGE_LCD:
+    MOV A, R1
+    CJNE A, #40, NEXT_LCD
+    MOV DPTR, #MSG4   ; Update LCD message
+    CALL LCD_PRINT
+
+NEXT_LCD:
+    CJNE A, #20, EXIT_LCD
+    MOV DPTR, #MSG5   ; Update LCD message
+    CALL LCD_PRINT
+
+EXIT_LCD:
+    RET
+
+; ====== EMERGENCY STOP ROUTINE ======
+EMERGENCY_STOP:
+    CLR P1.0          ; Turn off LED
+    MOV P2, #00H      ; Clear display
+    CLR P0.0          ; Stop buzzer
+    RET
+
+; ====== 1 SECOND DELAY ======
+DELAY:
+    MOV R7, #250
+    MOV R6, #250
+LOOP1:
+    DJNZ R6, LOOP1
+    DJNZ R7, DELAY
+    RET
+
+; ====== SHOW TIME ON 7-SEGMENT DISPLAY ======
+SHOW_TIME:
+    MOV P2, R1
+    RET
+
+; ====== LCD PRINT ROUTINE ======
+LCD_PRINT:
+    ; Code for displaying message stored in DPTR on LCD
+    RET
+
+; ====== MESSAGES ======
+MSG1: DB 'Oven Ready', 00H
+MSG2: DB 'Cooking...', 00H
+MSG3: DB 'STOPPED!', 00H
+MSG4: DB 'Almost Done', 00H
+MSG5: DB '5 sec left', 00H
+DISP: DB 'COUNTDOWN', 00H
+
+END
+
+
+    
