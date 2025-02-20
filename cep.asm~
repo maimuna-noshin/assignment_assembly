@@ -1,121 +1,30 @@
 ORG 0000H
     SJMP START         ; Jump to main program
 
-; ====== INTERRUPT SERVICE ROUTINE (EMERGENCY STOP) ======
-ORG 0003H
-EMERGENCY_ISR:
-    CLR P1.0          ; Turn off oven LED
-    CLR P3.5          ; Stop countdown
-    MOV P2, #00H      ; Clear 7-segment display
-    CLR P0.0          ; Stop buzzer
-    MOV DPTR, #MSG3   ; Display "STOPPED" on LCD
-    CALL LCD_PRINT
-    RETI              ; Return from interrupt
-
 ; ====== MAIN PROGRAM ======
 START:
-    MOV IE, #10000001B  ; Enable external interrupt (EX0)
-    SETB P1.0           ; Turn on oven LED (oven ready)
-    MOV DPTR, #MSG1     ; Display "Oven Ready"
-    CALL LCD_PRINT  
+    CLR P1.0           ; Ensure all LEDs are OFF initially
+    CLR P1.1
+    CLR P1.2
+    CLR P1.3
 
-; ====== WAIT FOR START BUTTON ======
 WAIT_START:
-    JNB P3.2, WAIT_START  ; Wait until Start button is pressed
+    JNB P2.0, WAIT_START  ; Wait until Start button (P3.2) is pressed
 
-    CALL GET_TIME         ; Get user input time from keypad
-    CALL COUNTDOWN        ; Start countdown
+    MOV P1, #00001111b
 
-    ; ====== AFTER COUNTDOWN ENDS ======
-    SETB P0.0          ; Activate buzzer
-    CALL DELAY
-    CLR P0.0           ; Turn off buzzer
+CHECK_EMERGENCY:
+    JB P2.1, EMERGENCY_STOP  ; If Emergency button (P3.5) is pressed, stop immediately
+    SJMP CHECK_EMERGENCY      ; Keep checking for Emergency Stop
 
-    SJMP WAIT_START    ; Restart process
-
-; ====== GET TIME INPUT FROM KEYPAD ======
-GET_TIME:
-    MOV R0, #00H         ; Initialize time to 0
-    MOV DPTR, #MSG6      ; Display "Enter Time"
-    CALL LCD_PRINT
-
-KEYPAD_LOOP:
-    CALL READ_KEYPAD      ; Get input from the user
-    CJNE A, #0FFH, VALID_INPUT  ; If valid key pressed, process
-    SJMP KEYPAD_LOOP      ; Otherwise, keep waiting
-
-VALID_INPUT:
-    CALL CONVERT_KEY      ; Convert keypad value to seconds
-    MOV R0, A            ; Store in R0
-    MOV DPTR, #MSG7      ; Display "Time Set"
-    CALL LCD_PRINT
-    RET
-
-; ====== COUNTDOWN LOGIC ======
-COUNTDOWN:
-    MOV A, R0          ; Load countdown time
-    MOV R1, A
-
-    ; If time > 60s, change LCD messages every 20s
-    MOV DPTR, #MSG2
-    CJNE A, #60, CHANGE_LCD
-
-COUNT_LOOP:
-    MOV DPTR, #DISP  ; Load 7-segment display routine
-    CALL SHOW_TIME   ; Update display
-
-    ; Check Emergency Stop
-    JB P3.5, EMERGENCY_STOP
-
-    CALL DELAY        ; 1-second delay
-    DJNZ R1, COUNT_LOOP  ; Loop until time = 0
-    RET
-
-; ====== LCD MESSAGE UPDATE DURING COUNTDOWN ======
-CHANGE_LCD:
-    MOV A, R1
-    CJNE A, #40, NEXT_LCD
-    MOV DPTR, #MSG4   ; Update LCD message
-    CALL LCD_PRINT
-
-NEXT_LCD:
-    CJNE A, #20, EXIT_LCD
-    MOV DPTR, #MSG5   ; Update LCD message
-    CALL LCD_PRINT
-
-EXIT_LCD:
-    RET
-
-; ====== EMERGENCY STOP ROUTINE ======
+; ====== EMERGENCY STOP FUNCTION ======
 EMERGENCY_STOP:
-    CLR P1.0          ; Turn off LED
-    MOV P2, #00H      ; Clear display
-    CLR P0.0          ; Stop buzzer
-    RET
+    CLR P1.0          ; Turn OFF LED 1
+    CLR P1.1          ; Turn OFF LED 2
+    CLR P1.2          ; Turn OFF LED 3
+    CLR P1.3          ; Turn OFF LED 4
+    SJMP WAIT_START   ; Go back to waiting for Start button
 
-; ====== 1 SECOND DELAY ======
-DELAY:
-    MOV R7, #250
-    MOV R6, #250
-LOOP1:
-    DJNZ R6, LOOP1
-    DJNZ R7, DELAY
-    RET
-
-; ====== SHOW TIME ON 7-SEGMENT DISPLAY ======
-SHOW_TIME:
-    MOV P2, R1
-    RET
-
-; ====== READ KEYPAD INPUT ======
-READ_KEYPAD:
-    MOV P1, #0F0H     ; Set row pins high, column pins low
-    MOV A, P1
-    ANL A, #0F0H      ; Mask out lower nibble
-    CJNE A, #0F0H, ROW_FOUND
-
-    MOV P1, #0FH      ; Set column pins high, row pins low
-    MOV A, P1
+END
 
 
-    
