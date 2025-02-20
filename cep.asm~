@@ -8,10 +8,17 @@ START:
     CLR P1.2
     CLR P1.3
 
+CALL GET_TIME      ; Get time input from keypad
+
 WAIT_START:
     JNB P2.0, WAIT_START  ; Wait until Start button (P3.2) is pressed
 
     MOV P1, #00001111b
+TIMER_LOOP:
+    CALL DELAY          ; Wait for input time
+    JB P2.1, EMERGENCY_STOP  ; Emergency Stop
+    DJNZ R7, TIMER_LOOP ; Countdown
+    SJMP WAIT_START    
 
 CHECK_EMERGENCY:
     JB P2.1, EMERGENCY_STOP  ; If Emergency button (P3.5) is pressed, stop immediately
@@ -24,6 +31,89 @@ EMERGENCY_STOP:
     CLR P1.2          ; Turn OFF LED 3
     CLR P1.3          ; Turn OFF LED 4
     SJMP WAIT_START   ; Go back to waiting for Start button
+GET_TIME:
+    MOV R6, #0         ; High byte (MSB)
+    MOV R7, #0         ; Low byte (LSB)
+    
+KEYPAD_LOOP:
+    CALL READ_KEY      ; Read keypad input
+    MOV R5, A         ; Store digit temporarily
+    
+    MOV A, R7         ; Load LSB
+    MOV B, #10
+    MUL AB            ; Multiply LSB by 10
+    MOV R7, A         ; Store back
+    
+    MOV A, R6         ; Load MSB
+    MOV B, #10
+    MUL AB            ; Multiply MSB by 10
+    ADD A, B          ; Add carry from LSB multiplication
+    MOV R6, A         ; Store back
+
+    MOV A, R7
+    ADD A, R5         ; Add new digit
+    MOV R7, A
+
+    JC INC_HIGH       ; If carry, increment MSB
+    SJMP KEYPAD_LOOP  ; Continue taking input
+
+INC_HIGH:
+    INC R6            ; Increment MSB if overflow occurs
+    SJMP KEYPAD_LOOP
+RET
+
+; ====== KEYPAD SCANNING FUNCTION ======
+READ_KEY:
+    MOV P0, #0F0H   ; Set rows as output, columns as input
+K1: MOV P0, #0FH    ; Ground all rows
+    MOV A, P0
+    ANL A, #0F0H    ; Mask out columns
+    JNZ K1          ; Wait for key press
+    MOV P0, #0F0H   ; Read which row is active
+    MOV A, P0
+    ANL A, #0F0H
+    CJNE A, #0F0H, ROW_FOUND
+    SJMP K1
+
+ROW_FOUND:
+    MOV R2, A       ; Store row
+    MOV P0, #0FFH   ; Ground one row at a time
+    CALL FIND_COL
+    MOV A, R2
+    MOV DPTR, #KEY_TABLE
+    MOVC A, @A+DPTR ; Get ASCII key from table
+RET
+
+FIND_COL:
+    MOV P0, #0EFH   ; Ground row 0
+    MOV A, P0
+    ANL A, #0F0H
+    CJNE A, #0F0H, FOUND
+    MOV P0, #0DFH   ; Ground row 1
+    MOV A, P0
+    ANL A, #0F0H
+    CJNE A, #0F0H, FOUND
+    MOV P0, #0BFH   ; Ground row 2
+    MOV A, P0
+    ANL A, #0F0H
+    CJNE A, #0F0H, FOUND
+    MOV P0, #07FH   ; Ground row 3
+    MOV A, P0
+    ANL A, #0F0H
+FOUND:
+    RET
+
+; ====== ASCII LOOK-UP TABLE FOR KEYPAD ======
+KEY_TABLE: DB '1', '2', '3', 'A'
+           DB '4', '5', '6', 'B'
+           DB '7', '8', '9', 'C'
+           DB '*', '0', '#', 'D'
+; DELAY FUNCTION (TIMER BASED)
+DELAY:
+    MOV R5, #255
+DELAY_LOOP:
+    DJNZ R5, DELAY_LOOP
+RET           
 
 END
 
