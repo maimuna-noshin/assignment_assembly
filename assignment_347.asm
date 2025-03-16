@@ -1,0 +1,410 @@
+$NOMOD51
+$INCLUDE (8051.MCU)
+      ORG   0000h
+      
+      LJMP   STARTUP
+
+      ORG 001BH
+      
+      
+      CJNE R6, #0, NOT_FINISHED
+      
+      INC R7
+      CJNE R7, #20, DECREMENT
+      MOV R7, #0
+      LCALL DISPLAY_TEXT
+      DECREMENT:
+      MOV R6, #20
+      INC R1
+      CJNE R1, #10, VALID
+      INC R2
+      MOV R1, #0
+      CJNE R2, #10, VALID
+      INC R3
+      MOV R2, #0
+      MOV TH1, #3CH
+      MOV TL1, #0B0H
+      SETB TR1 
+      RETI
+      NOT_FINISHED:
+      DEC R6
+      MOV TH1, #3CH
+      MOV TL1, #0B0H
+      SETB TR1 
+      RETI
+      VALID:
+      MOV TH1, #3CH
+      MOV TL1, #0B0H
+      SETB TR1
+      CJNE R1, #9, VALID2
+      CJNE R2, #9, VALID2
+      CJNE R3, #9, VALID2
+      LJMP HALT
+      VALID2:
+      RETI
+
+      ORG 0100H
+STARTUP:
+MOV 50H, #'0'
+MOV 51H, #'0'
+MOV 52H, #'0'
+RS EQU P3.0
+RW EQU P3.1
+E EQU P3.2
+CLR P2.6
+CLR P2.7
+CLR P2.4
+CLR P3.3
+
+MAIN_CYCLE:
+LCALL LCD_SETUP
+MOV R1, #50H
+MOV A, #0FFH
+MOV R2, #0
+REPEAT_INPUT:
+CALL FETCH_KEY
+
+CJNE A, #'C', PROCEED
+LJMP PROCESS
+PROCEED:
+ACALL DATA_WRITE
+ACALL DELAY
+MOV @R1, A
+INC R1
+INC R2
+SJMP REPEAT_INPUT
+
+PROCESS:
+DEC R2
+MOV  R1, #50H
+MOV B, @R1
+MOV A, R1
+ADD A, R2
+MOV R0, A
+MOV A, @R0
+MOV @R1, A
+MOV @R0, B
+LJMP VERIFY_60
+
+FETCH_KEY:
+K1: MOV P3, #0
+    MOV A, P2
+    ANL A, #00001111B
+    CJNE A, #00001111B, K1
+K2: ACALL DELAY
+    MOV A, P2
+    ANL A, #00001111B
+    CJNE A, #00001111B, CHECK
+    SJMP K2
+CHECK: 
+    ACALL DELAY
+    MOV A, P2
+    ANL A, #00001111B
+    CJNE A, #00001111B, LOCATE_ROW
+    SJMP K2
+
+LOCATE_ROW:
+    MOV P3, #11101111B
+    MOV A, P2
+    ANL A, #00001111B
+    CJNE A, #00001111B, ROW_A
+    MOV P3, #11011111B
+    MOV A, P2
+    ANL A, #00001111B
+    CJNE A, #00001111B, ROW_B
+    MOV P3, #10111111B
+    MOV A, P2
+    ANL A, #00001111B
+    CJNE A, #00001111B, ROW_C
+    MOV P3, #01111111B
+    MOV A, P2
+    ANL A, #00001111B
+    CJNE A, #00001111B, ROW_D
+    SJMP K2
+
+ROW_A: 
+    MOV DPTR, #KCODE0
+    SJMP SEARCH
+ROW_B: 
+    MOV DPTR, #KCODE1
+    SJMP SEARCH
+ROW_C: 
+    MOV DPTR, #KCODE2
+    SJMP SEARCH
+ROW_D: 
+    MOV DPTR, #KCODE3
+SEARCH: 
+    RRC A
+    JNC FOUND
+    INC DPTR
+    SJMP SEARCH
+FOUND: 
+    CLR A
+    MOVC A, @A+DPTR
+    RET
+
+COMNWRT: 
+    LCALL READY
+    MOV P1, A
+    CLR RS
+    CLR RW
+    SETB E
+    ACALL DELAY
+    CLR E
+    RET
+LCD_SETUP: 
+    MOV A, #38H
+    ACALL COMNWRT
+    ACALL DELAY
+    MOV A, #0FH
+    ACALL COMNWRT
+    ACALL DELAY
+    MOV A, #01H
+    ACALL COMNWRT
+    ACALL DELAY
+    MOV A, #06H
+    ACALL COMNWRT
+    ACALL DELAY
+    MOV A, #80H
+    ACALL COMNWRT
+    ACALL DELAY
+RET
+
+LCD_SETUP2: 
+    MOV A, #38H
+    ACALL COMNWRT
+    ACALL DELAY
+    MOV A, #0FH
+    ACALL COMNWRT
+    ACALL DELAY
+    MOV A, #01H
+    ACALL COMNWRT
+    ACALL DELAY
+    MOV A, #06H
+    ACALL COMNWRT
+    ACALL DELAY
+    MOV A, #80H
+    ACALL COMNWRT
+    ACALL DELAY
+RET
+
+DATA_WRITE: 
+    LCALL READY
+    MOV P1, A
+    SETB RS
+    CLR RW
+    SETB E
+    ACALL DELAY
+    CLR E
+    RET
+
+READY: 
+    SETB P1.7
+    CLR RS
+    SETB RW
+WAIT: 
+    CLR E
+    LCALL DELAY
+    SETB E
+    JB P1.7, WAIT
+    RET
+
+DELAY: 
+    MOV R5, #50
+HERE2: 
+    MOV R4, #255
+HERE: 
+    DJNZ R4, HERE
+    DJNZ R5, HERE2
+    RET
+
+KCODE0: DB 'C','0','D','E'
+KCODE1: DB '1','2','3','7'
+KCODE2: DB '4','5','6','B'
+KCODE3: DB '7','8','9','F'
+
+VERIFY_60:
+MOV A, 52H
+CLR C
+SUBB A, #30H
+JNZ ABOVE_60
+MOV A, 51H
+CLR C
+SUBB A, #30H
+CLR C
+SUBB A, #6
+JC BELOW_60
+JZ CHECK_LAST
+SJMP ABOVE_60
+
+CHECK_LAST: 
+MOV A, 50H
+CLR C
+SUBB A, #30
+JNZ ABOVE_60
+SJMP BELOW_60
+
+ABOVE_60:
+MOV DPTR, #MSG3
+MOV 60H, DPL
+MOV 61H, DPH
+ACALL LCD_SETUP
+MOV DPTR, #MSG1 
+CYCLE_1: 
+CLR A
+MOVC A,@A+DPTR
+JZ END_1
+LCALL DATA_WRITE
+LCALL DELAY
+INC DPTR
+LJMP CYCLE_1
+ 
+BELOW_60:
+MOV DPTR, #MSG3
+MOV 60H, DPL
+MOV 61H, DPH
+ACALL LCD_SETUP
+MOV DPTR, #MSG2
+CYCLE_2: 
+CLR A
+MOVC A,@A+DPTR
+JZ END_1
+LCALL DATA_WRITE
+LCALL DELAY
+INC DPTR
+LJMP CYCLE_2
+ 
+END_1:
+PROCESS2:
+MOV A, 50H
+CLR C
+SUBB A, #57
+CPL A
+ADD A, #1
+MOV R1, A
+MOV A, 51H
+CLR C
+SUBB A, #57
+CPL A
+ADD A, #1
+MOV R2, A
+MOV A, 52H
+CLR C
+SUBB A, #57
+CPL A
+ADD A, #1
+MOV R3, A
+
+INIT:
+        MOV IE, #88H
+    MOV R6, #20
+    MOV R7, #0
+    MOV P0, #0
+    MOV P3, #0
+    MOV TMOD, #10H
+    CLR P2.4
+    MOV TH1, #3CH
+    MOV TL1, #0B0H
+    SETB P2.4
+   CLR P3.3
+    SETB TR1
+    
+    MOV DPTR, #TABLE1
+PRIMARY:  
+    MOV A, R1  
+    CLR P2.7
+    ACALL SHOW  
+    MOV P0, A  
+    ACALL DELAY_MS  
+    SETB P2.7  
+
+    MOV A, R2
+    CLR P2.6 
+    ACALL SHOW  
+    MOV P0, A  
+    ACALL DELAY_MS 
+    SETB P2.6 
+    
+    MOV A, R3
+    CLR P2.5 
+    ACALL SHOW  
+    MOV P0, A  
+    ACALL DELAY_MS 
+    SETB P2.5
+
+    SJMP PRIMARY 
+
+HALT:
+    CLR TR1
+    MOV R1, #9
+    MOV R2, #9
+    MOV R3, #9
+    CLR P2.5
+    CLR P2.6
+    CLR P2.7
+    CLR P2.4
+    SETB P3.3  
+    SJMP HALT
+
+DELAY_MS: 
+    MOV R5, #02H
+    DEL1: MOV R4, #0FAH
+    DEL2: DJNZ R4, DEL2
+    DJNZ R5, DEL1
+    RET
+    
+SHOW:
+    MOVC A, @A+DPTR
+    RET
+    
+DISPLAY_TEXT:
+    MOV DPL, 60H
+    MOV DPH, 61H
+    LCALL LCD_SETUP2
+    
+    CYCLE_A: 
+    CLR A
+    MOVC A,@A+DPTR
+    INC DPTR
+    JZ END_A
+    LCALL DATA_WRITE
+    ACALL DELAY
+    LJMP CYCLE_A
+    
+END_A:
+    MOV 60H, DPL
+    MOV 61H, DPH
+    MOV DPTR, #TABLE1
+    RET
+    
+Loop:	
+      jmp Loop
+      
+TABLE1: 
+      DB 6FH  
+      DB 7FH  
+      DB 07H  
+      DB 7DH  
+      DB 6DH  
+      DB 66H  
+      DB 4FH  
+      DB 5BH  
+      DB 06H  
+      DB 3FH 
+      MSG1: DB "1",0 
+      MSG2: DB "food will be ready",0
+      MSG3: DB "food will be ready",0
+      MSG4: DB "food is ready!",0
+      MSG5: DB "4 I/O Ports",0
+      MSG6: DB "16-bit Timer",0
+      MSG7: DB "Single Chip MCU",0
+      MSG8: DB "UART Support",0
+      MSG9: DB "4 Interrupts",0
+      MSG10: DB "32KB ROM Max",0
+      MSG11: DB "8051: CISC MCU",0
+      MSG12: DB "Bit Addressable",0
+      MSG13: DB "Dual Timer Mode",0
+      MSG14: DB "8051: 1 Clock",0
+      MSG15: DB "0-255 Addresses",0
+
+end
